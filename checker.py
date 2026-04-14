@@ -36,7 +36,7 @@ class Checker:
             return "Request Error"
             
         if response.status_code == 404:
-            return "Not Found (Vulnerable)"
+            return "Not Found (Potentially Vulnerable)"
         elif response.status_code == 200:
             return "Found (Safe)"
         else:
@@ -54,7 +54,7 @@ class Checker:
             return "Request Error"
             
         if response.status_code == 404:
-            return "Not Found (Vulnerable)"
+            return "Not Found (Potentially Vulnerable)"
         elif response.status_code == 200:
             return "Found (Safe)"
         else:
@@ -65,14 +65,14 @@ class Checker:
         pypi_status = await self.check_pypi(package_name)
         
         # Since we only extract from .js files right now, these are JavaScript packages.
-        # They are only vulnerable if they are missing from NPM.
-        is_vulnerable = 'Vulnerable' in npm_status
+        # They are only potentially vulnerable if they are missing from NPM.
+        is_potentially_vulnerable = 'Potentially Vulnerable' in npm_status
         
         return {
             'package': package_name,
             'npm_status': npm_status,
             'pypi_status': pypi_status,
-            'risk': 'High' if is_vulnerable else 'Low'
+            'risk': 'High' if is_potentially_vulnerable else 'Low'
         }
 
     async def check_packages(self, packages: set[str]) -> list[dict]:
