@@ -1,0 +1,5 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    acme-corp-locked-ruby-gem (1.2.3)
+    rails (7.0.4)
