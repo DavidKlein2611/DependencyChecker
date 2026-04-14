@@ -1,11 +1,13 @@
 # Automated Dependency Confusion Checker
 
 ## Overview
-The Automated Dependency Confusion Checker is a specialized security testing tool designed to identify potential dependency confusion (supply chain) vulnerabilities in web applications. The tool automates the discovery phase by crawling a target domain for JavaScript files, extracting imported package names via AST-like regular expression matching, and verifying their existence against public package registries (NPM and PyPI).
+The Automated Dependency Confusion Checker is a specialized security testing tool designed to identify potential dependency confusion (supply chain) vulnerabilities in web applications. The tool automates the discovery phase by crawling a target domain for JavaScript and dependency manifest files (Python, Ruby, Java), extracting imported package names via AST-like regular expression matching and file parsing, and verifying their existence against public package registries (NPM, PyPI, RubyGems, Maven Central).
 
-If an internal-looking package name is referenced in the target's source code but does not exist on the public registry, the tool flags it as a high-risk candidate for a dependency confusion attack.
+If an internal-looking package name is referenced in the target's source code or configuration files but does not exist on the public registry, the tool flags it as a high-risk candidate for a dependency confusion attack.
 
 ## Core Features
+* **Multi-Ecosystem Support:** Discovers and parses dependency manifests across multiple languages including Python (`requirements.txt`, `Pipfile`), Ruby (`Gemfile`, `Gemfile.lock`), and Java (`pom.xml`, `build.gradle`), checking packages against PyPI, RubyGems, and Maven Central.
+* **Modern JS Framework Heuristics:** Employs advanced regex patterns to extract internal dependencies from compiled Webpack chunk definitions and Vite module registries, ensuring coverage for modern Single Page Applications.
 * **Asynchronous Execution:** Utilizes Python's `asyncio` for highly concurrent network requests, file downloading, and API validation.
 * **Advanced WAF Evasion:** Implements `curl_cffi` to spoof modern browser TLS fingerprints (JA3/JA4) and HTTP/2 headers. This effectively bypasses strict Web Application Firewalls (WAFs) like Cloudflare and AWS WAF that block generic Python scripts.
 * **Timing Profiles:** NMAP-style timing templates (`-T0` to `-T5`) provide granular control over connection concurrency and request delays, preventing accidental Denial of Service (DoS) and mitigating rate-limiting on target infrastructure.
