@@ -2,7 +2,7 @@ import json
 from urllib.parse import urlparse
 
 class Reporter:
-    def generate_report(self, findings: list[dict], url: str):
+    def generate_report(self, findings: list[dict], url: str, save_json: bool = False):
         print("\n" + "="*50)
         print("Dependency Confusion Scan Report")
         print("="*50)
@@ -22,18 +22,19 @@ class Reporter:
             
         print("="*50 + "\n")
         
-        # Save to file
-        domain = urlparse(url).netloc
-        report_filename = f"report_{domain.replace(':', '_')}.json"
-        
-        with open(report_filename, 'w') as f:
-            json.dump({
-                'target': url,
-                'summary': {
-                    'total_checked': len(findings),
-                    'high_risk_found': len(high_risk)
-                },
-                'findings': findings
-            }, f, indent=4)
+        if save_json:
+            # Save to file
+            domain = urlparse(url).netloc
+            report_filename = f"report_{domain.replace(':', '_')}.json"
             
-        print(f"[+] Report saved to {report_filename}")
+            with open(report_filename, 'w') as f:
+                json.dump({
+                    'target': url,
+                    'summary': {
+                        'total_checked': len(findings),
+                        'high_risk_found': len(high_risk)
+                    },
+                    'findings': findings
+                }, f, indent=4)
+                
+            print(f"[+] Report saved to {report_filename}")

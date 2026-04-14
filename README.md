@@ -40,7 +40,7 @@ If an internal-looking package name is referenced in the target's source code bu
 ## Usage
 
 ```text
-usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] url
+usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] [-j] url
 
 Automated Dependency Confusion Checker
 
@@ -55,6 +55,7 @@ options:
                         Proxy URL (e.g., http://127.0.0.1:8080) for routing through Burp Suite or a residential proxy
   -H HEADER, --header HEADER
                         Custom header to include in requests (e.g., 'Authorization: Bearer token'). Can be used multiple times.
+  -j, --json            Save the scan results to a JSON file
 ```
 
 ### Examples
@@ -63,6 +64,12 @@ options:
 Executes with default settings.
 ```bash
 python main.py https://target.com
+```
+
+**Scan and Save to JSON:**
+Outputs findings to the terminal and saves a detailed JSON report.
+```bash
+python main.py -j https://target.com
 ```
 
 **Stealth Scan:**

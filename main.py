@@ -17,7 +17,7 @@ TIMING_PROFILES = {
     5: (50, 0.0)   # T5: Extremely fast, barely any limits
 }
 
-async def run(url: str, timing_level: int, proxy: str = None, headers: dict = None):
+async def run(url: str, timing_level: int, proxy: str = None, headers: dict = None, save_json: bool = False):
     print(f"[*] Starting Dependency Confusion Checker for: {url}")
     concurrency, delay = TIMING_PROFILES.get(timing_level, TIMING_PROFILES[3])
     print(f"[*] Using Timing Profile -T{timing_level} (Concurrency: {concurrency}, Delay: {delay}s)")
@@ -52,7 +52,7 @@ async def run(url: str, timing_level: int, proxy: str = None, headers: dict = No
     
     # Phase 5: Reporting
     reporter = Reporter()
-    reporter.generate_report(findings, url)
+    reporter.generate_report(findings, url, save_json=save_json)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automated Dependency Confusion Checker")
@@ -63,6 +63,8 @@ if __name__ == "__main__":
                         help="Proxy URL (e.g., http://127.0.0.1:8080) for routing through Burp Suite or a residential proxy")
     parser.add_argument("-H", "--header", action="append", default=[],
                         help="Custom header to include in requests (e.g., 'Authorization: Bearer token'). Can be used multiple times.")
+    parser.add_argument("-j", "--json", action="store_true",
+                        help="Save the scan results to a JSON file")
     args = parser.parse_args()
     
     # Parse custom headers
@@ -81,4 +83,4 @@ if __name__ == "__main__":
     else:
         target_url = args.url
         
-    asyncio.run(run(target_url, args.timing, args.proxy, custom_headers))
+    asyncio.run(run(target_url, args.timing, args.proxy, custom_headers, args.json))
