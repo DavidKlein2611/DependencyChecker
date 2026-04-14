@@ -63,7 +63,7 @@ class Crawler:
                     js_urls.add(full_url + '.map')
 
         # If we can go deeper, find all a tags
-        if current_depth < self.max_depth:
+        if current_depth <= self.max_depth:
             tasks = []
             for a in soup.find_all('a'):
                 href = a.get('href')
@@ -71,9 +71,16 @@ class Crawler:
                     next_url = urljoin(url, href)
                     # Remove fragments/anchors
                     next_url = next_url.split('#')[0]
-                    # Ensure it's the same domain to prevent crawling the whole internet
-                    if urlparse(next_url).netloc == self.domain and next_url not in visited:
-                        tasks.append(self.fetch_page(next_url, current_depth + 1, visited, js_urls))
+                    
+                    # Check for dependency files
+                    dep_files = ['.txt', 'Pipfile', 'Gemfile', 'Gemfile.lock', 'pom.xml', 'build.gradle']
+                    if any(next_url.endswith(f) for f in ['requirements.txt', 'Pipfile', 'Gemfile', 'Gemfile.lock', 'pom.xml', 'build.gradle']):
+                        js_urls.add(next_url)
+                    
+                    if current_depth < self.max_depth:
+                        # Ensure it's the same domain to prevent crawling the whole internet
+                        if urlparse(next_url).netloc == self.domain and next_url not in visited:
+                            tasks.append(self.fetch_page(next_url, current_depth + 1, visited, js_urls))
             
             if tasks:
                 await asyncio.gather(*tasks)

@@ -24,11 +24,19 @@ class Reporter:
             else:
                 risk_indicator = "[i]"
                 
-            print(f"{risk_indicator} Package: {finding['package']}")
-            print(f"    NPM:   {finding['npm_status']}")
-            if finding['scope_status'] != 'N/A':
-                print(f"    Scope: {finding['scope_status']}")
-            print(f"    PyPI:  {finding['pypi_status']}")
+            print(f"{risk_indicator} Package: {finding['package']} ({finding['ecosystem']})")
+            
+            if finding['ecosystem'] == 'npm':
+                print(f"    NPM:   {finding['npm_status']}")
+                if finding['scope_status'] != 'N/A':
+                    print(f"    Scope: {finding['scope_status']}")
+                print(f"    PyPI:  {finding['pypi_status']}")
+            elif finding['ecosystem'] == 'python':
+                print(f"    PyPI:  {finding['pypi_status']}")
+            elif finding['ecosystem'] == 'ruby':
+                print(f"    RubyGems: {finding['ruby_status']}")
+            elif finding['ecosystem'] == 'java':
+                print(f"    Maven: {finding['java_status']}")
             
         print("="*50 + "\n")
         
