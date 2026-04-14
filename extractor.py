@@ -35,7 +35,7 @@ class Extractor:
         if len(package_name) < 2:
             return False
         # Filter out dynamic variables, template strings (e.g. ${s}), or malformed names
-        if not re.match(r"^@?[a-z0-9][a-z0-9._-]*$", package_name, re.IGNORECASE):
+        if not re.match(r"^@?[a-z0-9][a-z0-9._-]*(\/[a-z0-9._-]+)?$", package_name, re.IGNORECASE):
             return False
         return True
 

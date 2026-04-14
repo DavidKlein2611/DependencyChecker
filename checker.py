@@ -60,7 +60,32 @@ class Checker:
         else:
             return f"Error ({response.status_code})"
 
+    async def check_npm_scope(self, scope_name: str) -> str:
+        # Check if the org/scope exists
+        clean_scope = scope_name.strip('@')
+        url = f"https://registry.npmjs.org/-/org/{clean_scope}/package"
+        response = await self._make_request(url)
+        
+        if not response:
+            return "Request Error"
+            
+        if response.status_code == 404:
+            return "Unclaimed Scope (Critical)"
+        elif response.status_code == 200:
+            return "Claimed Scope (Safe)"
+        else:
+            return f"Error ({response.status_code})"
+
     async def check_package(self, package_name: str) -> dict:
+        scope_status = "N/A"
+        is_critical = False
+        
+        if package_name.startswith('@'):
+            scope = package_name.split('/')[0]
+            scope_status = await self.check_npm_scope(scope)
+            if 'Critical' in scope_status:
+                is_critical = True
+
         npm_status = await self.check_npm(package_name)
         pypi_status = await self.check_pypi(package_name)
         
@@ -68,11 +93,19 @@ class Checker:
         # They are only potentially vulnerable if they are missing from NPM.
         is_potentially_vulnerable = 'Potentially Vulnerable' in npm_status
         
+        if is_critical:
+            risk = 'Critical'
+        elif is_potentially_vulnerable:
+            risk = 'High'
+        else:
+            risk = 'Low'
+        
         return {
             'package': package_name,
             'npm_status': npm_status,
             'pypi_status': pypi_status,
-            'risk': 'High' if is_potentially_vulnerable else 'Low'
+            'scope_status': scope_status,
+            'risk': risk
         }
 
     async def check_packages(self, packages: set[str]) -> list[dict]:
