@@ -1,39 +1,38 @@
-import httpx
+from curl_cffi import requests
+from curl_cffi.requests.errors import RequestsError
 import re
 import asyncio
 
 class Extractor:
-    def __init__(self, max_concurrent: int = 10, delay: float = 0.5):
-        self.client = httpx.AsyncClient(timeout=10.0, follow_redirects=True)
+    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None):
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        self.client = requests.AsyncSession(
+            timeout=10.0,
+            impersonate="chrome110",
+            proxies=proxies,
+            verify=False
+        )
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.delay = delay
         # Common patterns for requires or imports
-        # Looks for require('package-name') or import ... from 'package-name'
         self.patterns = [
             re.compile(r"""require\(['"]([^.'"][^'"]+)['"]\)"""),
             re.compile(r"""from\s+['"]([^.'"][^'"]+)['"]"""),
             re.compile(r"""import\s+['"]([^.'"][^'"]+)['"]""")
         ]
         
-        # A basic whitelist of common public packages to filter out noise
         self.whitelist = {
             'react', 'react-dom', 'lodash', 'express', 'axios', 'core-js',
             'jquery', 'vue', 'angular', 'moment', 'tslib', 'rxjs', 'next'
         }
         
     def is_likely_internal(self, package_name: str) -> bool:
-        """Heuristic to determine if a package name looks internal."""
         if package_name in self.whitelist:
             return False
-            
-        # Ignore obvious relative paths or built-ins
         if package_name.startswith(('.', '/', '\\')):
             return False
-            
-        # Ignore standard library-like names (very simplistic check)
         if len(package_name) < 2:
             return False
-            
         return True
 
     async def fetch_and_extract(self, url: str) -> set[str]:
@@ -46,11 +45,10 @@ class Extractor:
                     for pattern in self.patterns:
                         matches = pattern.findall(content)
                         for match in matches:
-                            # Handle scoped packages (e.g. @company/package) and regular packages
                             pkg_name = match.split('/')[0] if not match.startswith('@') else '/'.join(match.split('/')[:2])
                             if self.is_likely_internal(pkg_name):
                                 packages.add(pkg_name)
-            except httpx.RequestError:
+            except (RequestsError, Exception):
                 pass # Silently ignore failed downloads for noisy files like assumed source maps
             finally:
                 if self.delay > 0:
@@ -62,12 +60,10 @@ class Extractor:
         print(f"[*] Downloading {len(urls)} files with rate limits...")
         all_packages = set()
         
-        # Use asyncio.gather to fetch concurrently
         tasks = [self.fetch_and_extract(url) for url in urls]
         results = await asyncio.gather(*tasks)
         
         for pkgs in results:
             all_packages.update(pkgs)
             
-        await self.client.aclose()
         return all_packages

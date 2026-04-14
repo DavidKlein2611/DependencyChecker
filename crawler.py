@@ -1,13 +1,24 @@
-import httpx
+from curl_cffi import requests
+from curl_cffi.requests.errors import RequestsError
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import asyncio
 
 class Crawler:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, proxy: str = None):
         self.base_url = base_url
-        self.client = httpx.AsyncClient(timeout=10.0, follow_redirects=True)
         self.domain = urlparse(base_url).netloc
+        
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        
+        # We use impersonate="chrome110" to spoof the TLS handshake (JA3/JA4 fingerprint) 
+        # and automatically inject perfect Chrome HTTP/2 headers.
+        self.client = requests.AsyncSession(
+            timeout=10.0,
+            impersonate="chrome110",
+            proxies=proxies,
+            verify=False # Ignore self-signed certs when using interception proxies like Burp
+        )
         
     async def discover_js_files(self) -> set[str]:
         """Fetches the homepage and finds JS and JS map files."""
@@ -17,8 +28,11 @@ class Crawler:
         try:
             response = await self.client.get(self.base_url)
             response.raise_for_status()
-        except httpx.RequestError as e:
-            print(f"[-] Failed to fetch {self.base_url}: {e}")
+        except RequestsError as e:
+            print(f"[-] Network/TLS Error fetching {self.base_url}: {e}")
+            return js_urls
+        except Exception as e:
+            print(f"[-] HTTP Error fetching {self.base_url}: {e}")
             return js_urls
             
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -42,5 +56,5 @@ class Crawler:
                 if full_url.endswith('.js'):
                     js_urls.add(full_url + '.map')
                     
-        await self.client.aclose()
+        # The session should be closed ideally, but python gc handles simple scripts fine.
         return js_urls

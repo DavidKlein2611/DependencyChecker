@@ -1,21 +1,28 @@
-import httpx
+from curl_cffi import requests
+from curl_cffi.requests.errors import RequestsError
 import asyncio
 
 class Checker:
-    def __init__(self, max_concurrent: int = 10, delay: float = 0.5):
-        self.client = httpx.AsyncClient(timeout=10.0)
+    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None):
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        self.client = requests.AsyncSession(
+            timeout=10.0,
+            impersonate="chrome110",
+            proxies=proxies,
+            verify=False
+        )
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.delay = delay
         self.npm_registry = "https://registry.npmjs.org/"
         self.pypi_registry = "https://pypi.org/pypi/{}/json"
         
-    async def _make_request(self, url: str) -> httpx.Response | None:
+    async def _make_request(self, url: str) -> requests.Response | None:
         """Helper to manage rate-limited requests to registries."""
         async with self.semaphore:
             try:
                 response = await self.client.get(url)
                 return response
-            except httpx.RequestError:
+            except (RequestsError, Exception):
                 return None
             finally:
                 if self.delay > 0:
@@ -68,5 +75,4 @@ class Checker:
         print(f"[*] Verifying {len(packages)} packages with rate limits...")
         tasks = [self.check_package(pkg) for pkg in packages]
         results = await asyncio.gather(*tasks)
-        await self.client.aclose()
         return results

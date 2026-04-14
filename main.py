@@ -17,13 +17,15 @@ TIMING_PROFILES = {
     5: (50, 0.0)   # T5: Extremely fast, barely any limits
 }
 
-async def run(url: str, timing_level: int):
+async def run(url: str, timing_level: int, proxy: str = None):
     print(f"[*] Starting Dependency Confusion Checker for: {url}")
     concurrency, delay = TIMING_PROFILES.get(timing_level, TIMING_PROFILES[3])
     print(f"[*] Using Timing Profile -T{timing_level} (Concurrency: {concurrency}, Delay: {delay}s)")
+    if proxy:
+        print(f"[*] Routing traffic through proxy: {proxy}")
     
     # Phase 2: Discovery
-    crawler = Crawler(url)
+    crawler = Crawler(url, proxy=proxy)
     js_urls = await crawler.discover_js_files()
     
     if not js_urls:
@@ -33,7 +35,7 @@ async def run(url: str, timing_level: int):
     print(f"[+] Found {len(js_urls)} potential files to analyze.")
     
     # Phase 3: Extraction
-    extractor = Extractor(max_concurrent=concurrency, delay=delay)
+    extractor = Extractor(max_concurrent=concurrency, delay=delay, proxy=proxy)
     packages = await extractor.extract_packages(js_urls)
     
     if not packages:
@@ -43,7 +45,7 @@ async def run(url: str, timing_level: int):
     print(f"[+] Extracted {len(packages)} unique package names to check.")
     
     # Phase 4: Validation
-    checker = Checker(max_concurrent=concurrency, delay=delay)
+    checker = Checker(max_concurrent=concurrency, delay=delay, proxy=proxy)
     findings = await checker.check_packages(packages)
     
     # Phase 5: Reporting
@@ -55,6 +57,8 @@ if __name__ == "__main__":
     parser.add_argument("url", help="The target URL to scan (e.g., https://example.com)")
     parser.add_argument("-T", "--timing", type=int, choices=[0, 1, 2, 3, 4, 5], default=3,
                         help="Timing template (0-5). 0=slowest/safest, 3=default, 5=fastest/riskiest")
+    parser.add_argument("-p", "--proxy", type=str, default=None,
+                        help="Proxy URL (e.g., http://127.0.0.1:8080) for routing through Burp Suite or a residential proxy")
     args = parser.parse_args()
     
     # Basic URL validation
@@ -64,4 +68,4 @@ if __name__ == "__main__":
     else:
         target_url = args.url
         
-    asyncio.run(run(target_url, args.timing))
+    asyncio.run(run(target_url, args.timing, args.proxy))
