@@ -17,7 +17,7 @@ TIMING_PROFILES = {
     5: (50, 0.0)   # T5: Extremely fast, barely any limits
 }
 
-async def run(url: str, timing_level: int, proxy: str = None, headers: dict = None, save_json: bool = False):
+async def run(url: str, timing_level: int, proxy: str = None, headers: dict = None, save_json: bool = False, depth: int = 1):
     print(f"[*] Starting Dependency Confusion Checker for: {url}")
     concurrency, delay = TIMING_PROFILES.get(timing_level, TIMING_PROFILES[3])
     print(f"[*] Using Timing Profile -T{timing_level} (Concurrency: {concurrency}, Delay: {delay}s)")
@@ -27,7 +27,7 @@ async def run(url: str, timing_level: int, proxy: str = None, headers: dict = No
         print(f"[*] Using {len(headers)} custom headers")
     
     # Phase 2: Discovery
-    crawler = Crawler(url, proxy=proxy, headers=headers)
+    crawler = Crawler(url, proxy=proxy, headers=headers, max_concurrent=concurrency, delay=delay, max_depth=depth)
     js_urls = await crawler.discover_js_files()
     
     if not js_urls:
@@ -65,6 +65,8 @@ if __name__ == "__main__":
                         help="Custom header to include in requests (e.g., 'Authorization: Bearer token'). Can be used multiple times.")
     parser.add_argument("-j", "--json", action="store_true",
                         help="Save the scan results to a JSON file")
+    parser.add_argument("-d", "--depth", type=int, default=1,
+                        help="Spidering depth (e.g., 1 = homepage only, 2 = homepage + links). Default: 1")
     args = parser.parse_args()
     
     # Parse custom headers
@@ -83,4 +85,4 @@ if __name__ == "__main__":
     else:
         target_url = args.url
         
-    asyncio.run(run(target_url, args.timing, args.proxy, custom_headers, args.json))
+    asyncio.run(run(target_url, args.timing, args.proxy, custom_headers, args.json, args.depth))

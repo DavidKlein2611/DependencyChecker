@@ -40,7 +40,7 @@ If an internal-looking package name is referenced in the target's source code bu
 ## Usage
 
 ```text
-usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] [-j] url
+usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] [-j] [-d DEPTH] url
 
 Automated Dependency Confusion Checker
 
@@ -56,6 +56,8 @@ options:
   -H HEADER, --header HEADER
                         Custom header to include in requests (e.g., 'Authorization: Bearer token'). Can be used multiple times.
   -j, --json            Save the scan results to a JSON file
+  -d DEPTH, --depth DEPTH
+                        Spidering depth (e.g., 1 = homepage only, 2 = homepage + links). Default: 1
 ```
 
 ### Examples
@@ -64,6 +66,12 @@ options:
 Executes with default settings.
 ```bash
 python main.py https://target.com
+```
+
+**Deep Spidering Scan:**
+Recursively crawls all internal links up to a depth of 3 to discover hidden JavaScript chunks in large Single Page Applications.
+```bash
+python main.py -d 3 https://target.com
 ```
 
 **Scan and Save to JSON:**
