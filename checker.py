@@ -64,11 +64,15 @@ class Checker:
         npm_status = await self.check_npm(package_name)
         pypi_status = await self.check_pypi(package_name)
         
+        # Since we only extract from .js files right now, these are JavaScript packages.
+        # They are only vulnerable if they are missing from NPM.
+        is_vulnerable = 'Vulnerable' in npm_status
+        
         return {
             'package': package_name,
             'npm_status': npm_status,
             'pypi_status': pypi_status,
-            'risk': 'High' if 'Vulnerable' in npm_status or 'Vulnerable' in pypi_status else 'Low'
+            'risk': 'High' if is_vulnerable else 'Low'
         }
 
     async def check_packages(self, packages: set[str]) -> list[dict]:
