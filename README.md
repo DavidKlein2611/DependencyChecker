@@ -40,7 +40,7 @@ If an internal-looking package name is referenced in the target's source code bu
 ## Usage
 
 ```text
-usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] url
+usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] url
 
 Automated Dependency Confusion Checker
 
@@ -53,6 +53,8 @@ options:
                         Timing template (0-5). 0=slowest/safest, 3=default, 5=fastest/riskiest
   -p PROXY, --proxy PROXY
                         Proxy URL (e.g., http://127.0.0.1:8080) for routing through Burp Suite or a residential proxy
+  -H HEADER, --header HEADER
+                        Custom header to include in requests (e.g., 'Authorization: Bearer token'). Can be used multiple times.
 ```
 
 ### Examples
@@ -67,6 +69,12 @@ python main.py https://target.com
 Executes with a slow timing profile (`-T 1`) to evade behavioral WAF detections and abide by rate limit RoEs.
 ```bash
 python main.py -T 1 https://target.com
+```
+
+**Authenticated Scan (Custom Headers):**
+Passes specific headers to the target to bypass authentication layers or meet VDP requirements.
+```bash
+python main.py -T 2 -H "Authorization: Bearer <token>" -H "Cookie: session=123" https://target.com
 ```
 
 **Proxied Scan:**

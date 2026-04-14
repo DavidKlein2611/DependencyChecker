@@ -17,15 +17,17 @@ TIMING_PROFILES = {
     5: (50, 0.0)   # T5: Extremely fast, barely any limits
 }
 
-async def run(url: str, timing_level: int, proxy: str = None):
+async def run(url: str, timing_level: int, proxy: str = None, headers: dict = None):
     print(f"[*] Starting Dependency Confusion Checker for: {url}")
     concurrency, delay = TIMING_PROFILES.get(timing_level, TIMING_PROFILES[3])
     print(f"[*] Using Timing Profile -T{timing_level} (Concurrency: {concurrency}, Delay: {delay}s)")
     if proxy:
         print(f"[*] Routing traffic through proxy: {proxy}")
+    if headers:
+        print(f"[*] Using {len(headers)} custom headers")
     
     # Phase 2: Discovery
-    crawler = Crawler(url, proxy=proxy)
+    crawler = Crawler(url, proxy=proxy, headers=headers)
     js_urls = await crawler.discover_js_files()
     
     if not js_urls:
@@ -35,7 +37,7 @@ async def run(url: str, timing_level: int, proxy: str = None):
     print(f"[+] Found {len(js_urls)} potential files to analyze.")
     
     # Phase 3: Extraction
-    extractor = Extractor(max_concurrent=concurrency, delay=delay, proxy=proxy)
+    extractor = Extractor(max_concurrent=concurrency, delay=delay, proxy=proxy, headers=headers)
     packages = await extractor.extract_packages(js_urls)
     
     if not packages:
@@ -59,7 +61,18 @@ if __name__ == "__main__":
                         help="Timing template (0-5). 0=slowest/safest, 3=default, 5=fastest/riskiest")
     parser.add_argument("-p", "--proxy", type=str, default=None,
                         help="Proxy URL (e.g., http://127.0.0.1:8080) for routing through Burp Suite or a residential proxy")
+    parser.add_argument("-H", "--header", action="append", default=[],
+                        help="Custom header to include in requests (e.g., 'Authorization: Bearer token'). Can be used multiple times.")
     args = parser.parse_args()
+    
+    # Parse custom headers
+    custom_headers = {}
+    for h in args.header:
+        if ':' in h:
+            key, val = h.split(':', 1)
+            custom_headers[key.strip()] = val.strip()
+        else:
+            print(f"[-] Warning: Invalid header format ignored: {h}")
     
     # Basic URL validation
     parsed_url = urlparse(args.url)
@@ -68,4 +81,4 @@ if __name__ == "__main__":
     else:
         target_url = args.url
         
-    asyncio.run(run(target_url, args.timing, args.proxy))
+    asyncio.run(run(target_url, args.timing, args.proxy, custom_headers))

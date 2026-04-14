@@ -4,13 +4,14 @@ import re
 import asyncio
 
 class Extractor:
-    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None):
+    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None, headers: dict = None):
         proxies = {"http": proxy, "https": proxy} if proxy else None
         self.client = requests.AsyncSession(
             timeout=10.0,
             impersonate="chrome110",
             proxies=proxies,
-            verify=False
+            verify=False,
+            headers=headers
         )
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.delay = delay

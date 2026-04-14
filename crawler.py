@@ -5,7 +5,7 @@ from urllib.parse import urljoin, urlparse
 import asyncio
 
 class Crawler:
-    def __init__(self, base_url: str, proxy: str = None):
+    def __init__(self, base_url: str, proxy: str = None, headers: dict = None):
         self.base_url = base_url
         self.domain = urlparse(base_url).netloc
         
@@ -17,7 +17,8 @@ class Crawler:
             timeout=10.0,
             impersonate="chrome110",
             proxies=proxies,
-            verify=False # Ignore self-signed certs when using interception proxies like Burp
+            verify=False, # Ignore self-signed certs when using interception proxies like Burp
+            headers=headers
         )
         
     async def discover_js_files(self) -> set[str]:
