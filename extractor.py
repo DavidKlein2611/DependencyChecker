@@ -5,13 +5,13 @@ import asyncio
 import json
 
 class Extractor:
-    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None, headers: dict = None):
+    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None, headers: dict = None, verify: bool = False):
         proxies = {"http": proxy, "https": proxy} if proxy else None
         self.client = requests.AsyncSession(
             timeout=10.0,
             impersonate="chrome110",
             proxies=proxies,
-            verify=False,
+            verify=verify,
             headers=headers
         )
         self.semaphore = asyncio.Semaphore(max_concurrent)
@@ -105,7 +105,7 @@ class Extractor:
                                     pkg_name = f"{parts[0]}/{parts[1]}" if parts[0].startswith('@') and len(parts) > 1 else parts[0]
                                     if self.is_likely_internal(pkg_name):
                                         packages.add((pkg_name, 'npm'))
-                        except Exception:
+                        except json.JSONDecodeError:
                             pass # Fallback to regex if parsing fails
 
                     # 2. Raw regex for node_modules/ paths in both .js and .map files
@@ -121,8 +121,10 @@ class Extractor:
                             pkg_name = match.split('/')[0] if not match.startswith('@') else '/'.join(match.split('/')[:2])
                             if self.is_likely_internal(pkg_name):
                                 packages.add((pkg_name, 'npm'))
-            except (RequestsError, Exception):
+            except RequestsError:
                 pass # Silently ignore failed downloads for noisy files like assumed source maps
+            except Exception as e:
+                print(f"[-] Unexpected error extracting from {url}: {e}")
             finally:
                 if self.delay > 0:
                     await asyncio.sleep(self.delay)
