@@ -6,6 +6,7 @@ The Automated Dependency Confusion Checker is a specialized security testing too
 If an internal-looking package name is referenced in the target's source code or configuration files but does not exist on the public registry, the tool flags it as a high-risk candidate for a dependency confusion attack.
 
 ## Core Features
+* **Active & Passive Scanning:** Run as a fast active crawler (`main.py`) or load it as a passive `mitmproxy` addon (`passive_proxy.py`) to discover and verify dependencies simply by browsing a target in your web browser.
 * **Multi-Ecosystem Support:** Discovers and parses dependency manifests across multiple languages including Python (`requirements.txt`, `Pipfile`), Ruby (`Gemfile`, `Gemfile.lock`), and Java (`pom.xml`, `build.gradle`), checking packages against PyPI, RubyGems, and Maven Central.
 * **Modern JS Framework Heuristics:** Employs advanced regex patterns to extract internal dependencies from compiled Webpack chunk definitions and Vite module registries, ensuring coverage for modern Single Page Applications.
 * **Asynchronous Execution:** Utilizes Python's `asyncio` for highly concurrent network requests, file downloading, and API validation.
@@ -98,6 +99,12 @@ python main.py -T 2 -H "Authorization: Bearer <token>" -H "Cookie: session=123" 
 Routes all traffic through a local interception proxy (like Burp Suite).
 ```bash
 python main.py -T 2 -p http://127.0.0.1:8080 https://target.com
+```
+
+**Passive Scanning Mode (mitmproxy):**
+Run the tool as a passive interceptor. Configure your browser to use `127.0.0.1:8080` as its proxy, and manually click through the target application (perfect for authenticated sessions). Dependencies are extracted and checked silently in the background.
+```bash
+mitmdump -s passive_proxy.py -p 8080
 ```
 
 ## Timing Profiles Reference
