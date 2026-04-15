@@ -22,7 +22,7 @@ If an internal-looking package name is referenced in the target's source code or
 
 1. Clone the repository and navigate to the project directory:
    ```bash
-   git clone https://github.com/DavidKlein2611/DepenedencyChecker
+   git clone https://github.com/DavidKlein2611/DependencyChecker
    cd DependencyChecker
    ```
 
@@ -41,6 +41,9 @@ If an internal-looking package name is referenced in the target's source code or
    ```
 
 ## Usage
+
+### Active Scanning Mode (Crawler)
+The active crawler automatically spiders the target to find and extract dependencies.
 
 ```text
 usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] [-j] [-d DEPTH] url
@@ -63,7 +66,7 @@ options:
                         Spidering depth (e.g., 1 = homepage only, 2 = homepage + links). Default: 1
 ```
 
-### Examples
+#### Active Scanning Examples
 
 **Standard Scan:**
 Executes with default settings.
@@ -101,11 +104,28 @@ Routes all traffic through a local interception proxy (like Burp Suite).
 python main.py -T 2 -p http://127.0.0.1:8080 https://target.com
 ```
 
-**Passive Scanning Mode (mitmproxy):**
-Run the tool as a passive interceptor. Configure your browser to use `127.0.0.1:8080` as its proxy, and manually click through the target application (perfect for authenticated sessions). Dependencies are extracted and checked silently in the background.
+### Passive Scanning Mode (Browser Proxy)
+Passive mode is an stealthy way to find vulnerabilities inside authenticated portals or hidden single-page applications. Instead of sending thousands of active requests, the tool sits in the background while your regular web browser does the heavy lifting.
+
+**Step 1: Start the Proxy**
+Run the `mitmproxy` script using the `-q` (quiet) flag to hide standard HTTP logs, ensuring your terminal only alerts you when a vulnerability is found.
 ```bash
-mitmdump -s passive_proxy.py -p 8080
+mitmdump -q -s passive_proxy.py -p 8080
 ```
+
+**Step 2: Configure Your Browser**
+1. Install a proxy manager extension like **FoxyProxy** for Chrome or Firefox.
+2. Create a new proxy profile pointing to HTTP `127.0.0.1` on port `8080`.
+3. Activate the profile so your browser traffic routes through the script.
+
+**Step 3: Trust the Proxy Certificate (Crucial)**
+Because the proxy intercepts HTTPS traffic, you must trust its certificate to prevent your browser from throwing SSL errors:
+1. With the proxy running and FoxyProxy active, navigate to: `http://mitm.it`
+2. Download the certificate for your operating system.
+3. Install and trust it as a Root Certificate Authority.
+
+**Step 4: Browse the Target**
+Navigate to your target website, log in, and click around naturally. The passive scanner will automatically extract and verify every dependency it sees in the background, instantly alerting you in the terminal if it finds a vulnerability.
 
 ## Timing Profiles Reference
 * `-T 0`: Concurrency: 1, Delay: 5.0s (Very slow, maximum safety)
