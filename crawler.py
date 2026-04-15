@@ -5,7 +5,7 @@ from urllib.parse import urljoin, urlparse
 import asyncio
 
 class Crawler:
-    def __init__(self, base_url: str, proxy: str = None, headers: dict = None, max_concurrent: int = 10, delay: float = 0.5, max_depth: int = 1):
+    def __init__(self, base_url: str, proxy: str = None, headers: dict = None, max_concurrent: int = 10, delay: float = 0.5, max_depth: int = 1, verify: bool = False):
         self.base_url = base_url
         self.domain = urlparse(base_url).netloc
         self.max_depth = max_depth
@@ -20,7 +20,7 @@ class Crawler:
             timeout=10.0,
             impersonate="chrome110",
             proxies=proxies,
-            verify=False, # Ignore self-signed certs when using interception proxies like Burp
+            verify=verify, # Ignore self-signed certs when using interception proxies like Burp
             headers=headers
         )
         
@@ -35,7 +35,10 @@ class Crawler:
                 response = await self.client.get(url)
                 if response.status_code != 200:
                     return
-            except (RequestsError, Exception):
+            except RequestsError:
+                return
+            except Exception as e:
+                print(f"[-] Unexpected error fetching {url}: {e}")
                 return
             finally:
                 if self.delay > 0:

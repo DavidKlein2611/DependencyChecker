@@ -3,30 +3,35 @@ from curl_cffi.requests.errors import RequestsError
 import asyncio
 
 class Checker:
-    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None):
+    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None, verify: bool = False):
         proxies = {"http": proxy, "https": proxy} if proxy else None
         self.client = requests.AsyncSession(
             timeout=10.0,
             impersonate="chrome110",
             proxies=proxies,
-            verify=False
+            verify=verify
         )
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.delay = delay
         self.npm_registry = "https://registry.npmjs.org/"
         self.pypi_registry = "https://pypi.org/pypi/{}/json"
         
-    async def _make_request(self, url: str) -> requests.Response | None:
+    async def _make_request(self, url: str, retries: int = 3) -> requests.Response | None:
         """Helper to manage rate-limited requests to registries."""
-        async with self.semaphore:
-            try:
-                response = await self.client.get(url)
-                return response
-            except (RequestsError, Exception):
-                return None
-            finally:
-                if self.delay > 0:
-                    await asyncio.sleep(self.delay)
+        for attempt in range(retries):
+            async with self.semaphore:
+                try:
+                    response = await self.client.get(url)
+                    if response.status_code == 429:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    return response
+                except (RequestsError, Exception):
+                    return None
+                finally:
+                    if self.delay > 0:
+                        await asyncio.sleep(self.delay)
+        return None
 
     async def check_npm(self, package_name: str) -> str:
         url = f"{self.npm_registry}{package_name}"
@@ -128,7 +133,6 @@ class Checker:
                     is_critical = True
 
             npm_status = await self.check_npm(package_name)
-            pypi_status = await self.check_pypi(package_name)
             is_potentially_vulnerable = 'Potentially Vulnerable' in npm_status
         elif ecosystem == 'python':
             pypi_status = await self.check_pypi(package_name)
