@@ -128,7 +128,6 @@ class Checker:
                     is_critical = True
 
             npm_status = await self.check_npm(package_name)
-            pypi_status = await self.check_pypi(package_name)
             is_potentially_vulnerable = 'Potentially Vulnerable' in npm_status
         elif ecosystem == 'python':
             pypi_status = await self.check_pypi(package_name)

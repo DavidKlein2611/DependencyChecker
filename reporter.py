@@ -30,7 +30,6 @@ class Reporter:
                 print(f"    NPM:   {finding['npm_status']}")
                 if finding['scope_status'] != 'N/A':
                     print(f"    Scope: {finding['scope_status']}")
-                print(f"    PyPI:  {finding['pypi_status']}")
             elif finding['ecosystem'] == 'python':
                 print(f"    PyPI:  {finding['pypi_status']}")
             elif finding['ecosystem'] == 'ruby':
