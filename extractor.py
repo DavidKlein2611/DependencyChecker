@@ -38,6 +38,11 @@ class Extractor:
             return False
         if len(package_name) < 2:
             return False
+            
+        # Filter out short alphanumeric Webpack/Vite minified module IDs (e.g. 'Kijs', 'g9Kq')
+        if len(package_name) <= 4 and package_name.isalnum() and any(c.isupper() for c in package_name):
+            return False
+            
         # Filter out dynamic variables, template strings (e.g. ${s}), or malformed names
         if not re.match(r"^@?[a-z0-9][a-z0-9._-]*(\/[a-z0-9._-]+)?$", package_name, re.IGNORECASE):
             return False
