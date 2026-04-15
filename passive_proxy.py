@@ -1,4 +1,5 @@
 import asyncio
+from collections import OrderedDict
 from mitmproxy import http
 from mitmproxy import ctx
 from extractor import Extractor
@@ -6,6 +7,23 @@ from checker import Checker
 from rich.console import Console
 
 console = Console()
+
+class LRUSet:
+    def __init__(self, capacity: int):
+        self.cache = OrderedDict()
+        self.capacity = capacity
+
+    def add(self, key):
+        self.cache[key] = None
+        self.cache.move_to_end(key)
+        if len(self.cache) > self.capacity:
+            self.cache.popitem(last=False)
+
+    def __contains__(self, key):
+        if key in self.cache:
+            self.cache.move_to_end(key)
+            return True
+        return False
 
 class DependencyConfusionAddon:
     def __init__(self):
@@ -15,8 +33,8 @@ class DependencyConfusionAddon:
         self.checker = Checker()
         
         # Keep track of what we've seen to avoid redundant processing
-        self.analyzed_urls = set()
-        self.checked_packages = set()
+        self.analyzed_urls = LRUSet(10000)
+        self.checked_packages = LRUSet(10000)
 
         console.print("[bold green][+][/bold green] Passive Dependency Confusion Scanner Loaded!")
         console.print("[i]Browse the target site through this proxy. Background scanning is active...[/i]\n")
