@@ -1,169 +1,147 @@
-from curl_cffi import requests
-from curl_cffi.requests.errors import RequestsError
 import asyncio
 
-class Checker:
-    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None, verify: bool = False):
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        self.client = requests.AsyncSession(
-            timeout=10.0,
-            impersonate="chrome110",
-            proxies=proxies,
-            verify=verify
-        )
-        self.semaphore = asyncio.Semaphore(max_concurrent)
-        self.delay = delay
-        self.npm_registry = "https://registry.npmjs.org/"
-        self.pypi_registry = "https://pypi.org/pypi/{}/json"
-        
-    async def _make_request(self, url: str, retries: int = 3) -> requests.Response | None:
-        """Helper to manage rate-limited requests to registries."""
-        for attempt in range(retries):
-            async with self.semaphore:
-                try:
-                    response = await self.client.get(url)
-                    if response.status_code == 429:
-                        await asyncio.sleep(2 ** attempt)
-                        continue
-                    return response
-                except (RequestsError, Exception):
-                    return None
-                finally:
-                    if self.delay > 0:
-                        await asyncio.sleep(self.delay)
-        return None
+class Registry:
+    async def check(self, package_name: str) -> dict:
+        pass
 
-    async def check_npm(self, package_name: str) -> str:
-        url = f"{self.npm_registry}{package_name}"
-        response = await self._make_request(url)
-        
-        if not response:
-            return "Request Error"
-            
-        if response.status_code == 404:
-            return "Not Found (Potentially Vulnerable)"
-        elif response.status_code == 200:
-            return "Found (Safe)"
-        else:
-            return f"Error ({response.status_code})"
+class NpmRegistry(Registry):
+    def __init__(self, http_client):
+        self.http_client = http_client
+        self.registry_url = "https://registry.npmjs.org/"
 
-    async def check_pypi(self, package_name: str) -> str:
-        # PyPI doesn't use scoped names like @scope/pkg, so we skip if it's scoped
+    async def check(self, package_name: str) -> dict:
+        result = {"npm_status": "N/A", "scope_status": "N/A"}
+        
         if package_name.startswith('@'):
-            return "N/A (Scoped)"
-            
-        url = self.pypi_registry.format(package_name)
-        response = await self._make_request(url)
-        
-        if not response:
-            return "Request Error"
-            
-        if response.status_code == 404:
-            return "Not Found (Potentially Vulnerable)"
-        elif response.status_code == 200:
-            return "Found (Safe)"
-        else:
-            return f"Error ({response.status_code})"
+            scope = package_name.split('/')[0]
+            clean_scope = scope.strip('@')
+            url = f"https://registry.npmjs.org/-/org/{clean_scope}/package"
+            response = await self.http_client.get(url)
+            if not response:
+                result["scope_status"] = "Request Error"
+            elif response.status_code == 404:
+                result["scope_status"] = "Unclaimed Scope (Critical)"
+            elif response.status_code == 200:
+                result["scope_status"] = "Claimed Scope (Safe)"
+            else:
+                result["scope_status"] = f"Error ({response.status_code})"
 
-    async def check_npm_scope(self, scope_name: str) -> str:
-        # Check if the org/scope exists
-        clean_scope = scope_name.strip('@')
-        url = f"https://registry.npmjs.org/-/org/{clean_scope}/package"
-        response = await self._make_request(url)
-        
+        url = f"{self.registry_url}{package_name}"
+        response = await self.http_client.get(url)
         if not response:
-            return "Request Error"
-            
-        if response.status_code == 404:
-            return "Unclaimed Scope (Critical)"
+            result["npm_status"] = "Request Error"
+        elif response.status_code == 404:
+            result["npm_status"] = "Not Found (Potentially Vulnerable)"
         elif response.status_code == 200:
-            return "Claimed Scope (Safe)"
+            result["npm_status"] = "Found (Safe)"
         else:
-            return f"Error ({response.status_code})"
+            result["npm_status"] = f"Error ({response.status_code})"
+            
+        return result
 
-    async def check_rubygems(self, package_name: str) -> str:
+class PypiRegistry(Registry):
+    def __init__(self, http_client):
+        self.http_client = http_client
+        self.registry_url = "https://pypi.org/pypi/{}/json"
+
+    async def check(self, package_name: str) -> dict:
+        result = {"pypi_status": "N/A"}
+        if package_name.startswith('@'):
+            result["pypi_status"] = "N/A (Scoped)"
+            return result
+            
+        url = self.registry_url.format(package_name)
+        response = await self.http_client.get(url)
+        if not response:
+            result["pypi_status"] = "Request Error"
+        elif response.status_code == 404:
+            result["pypi_status"] = "Not Found (Potentially Vulnerable)"
+        elif response.status_code == 200:
+            result["pypi_status"] = "Found (Safe)"
+        else:
+            result["pypi_status"] = f"Error ({response.status_code})"
+        return result
+
+class RubyGemsRegistry(Registry):
+    def __init__(self, http_client):
+        self.http_client = http_client
+
+    async def check(self, package_name: str) -> dict:
+        result = {"ruby_status": "N/A"}
         url = f"https://rubygems.org/api/v1/gems/{package_name}.json"
-        response = await self._make_request(url)
-        
+        response = await self.http_client.get(url)
         if not response:
-            return "Request Error"
-            
-        if response.status_code == 404:
-            return "Not Found (Potentially Vulnerable)"
+            result["ruby_status"] = "Request Error"
+        elif response.status_code == 404:
+            result["ruby_status"] = "Not Found (Potentially Vulnerable)"
         elif response.status_code == 200:
-            return "Found (Safe)"
+            result["ruby_status"] = "Found (Safe)"
         else:
-            return f"Error ({response.status_code})"
+            result["ruby_status"] = f"Error ({response.status_code})"
+        return result
 
-    async def check_maven(self, package_name: str) -> str:
-        # Using Maven Central Solr Search API
+class MavenRegistry(Registry):
+    def __init__(self, http_client):
+        self.http_client = http_client
+
+    async def check(self, package_name: str) -> dict:
+        result = {"java_status": "N/A"}
         url = f"https://search.maven.org/solrsearch/select?q=a:{package_name}&rows=1&wt=json"
-        response = await self._make_request(url)
-        
+        response = await self.http_client.get(url)
         if not response:
-            return "Request Error"
-            
-        if response.status_code == 200:
+            result["java_status"] = "Request Error"
+        elif response.status_code == 200:
             try:
                 data = response.json()
-                if data.get('response', {}).get('numFound', 0) == 0:
-                    return "Not Found (Potentially Vulnerable)"
+                if data.get("response", {}).get("numFound", 0) == 0:
+                    result["java_status"] = "Not Found (Potentially Vulnerable)"
                 else:
-                    return "Found (Safe)"
+                    result["java_status"] = "Found (Safe)"
             except Exception:
-                return "Parse Error"
+                result["java_status"] = "Parse Error"
         else:
-            return f"Error ({response.status_code})"
+            result["java_status"] = f"Error ({response.status_code})"
+        return result
+
+class Checker:
+    def __init__(self, adapters=None):
+        self.adapters = adapters or {}
 
     async def check_package(self, package_info: tuple[str, str]) -> dict:
         package_name, ecosystem = package_info
-        scope_status = "N/A"
-        npm_status = "N/A"
-        pypi_status = "N/A"
-        ruby_status = "N/A"
-        java_status = "N/A"
-        is_critical = False
-        is_potentially_vulnerable = False
-
-        if ecosystem == 'npm':
-            if package_name.startswith('@'):
-                scope = package_name.split('/')[0]
-                scope_status = await self.check_npm_scope(scope)
-                if 'Critical' in scope_status:
-                    is_critical = True
-
-            npm_status = await self.check_npm(package_name)
-            is_potentially_vulnerable = 'Potentially Vulnerable' in npm_status
-        elif ecosystem == 'python':
-            pypi_status = await self.check_pypi(package_name)
-            is_potentially_vulnerable = 'Potentially Vulnerable' in pypi_status
-        elif ecosystem == 'ruby':
-            ruby_status = await self.check_rubygems(package_name)
-            is_potentially_vulnerable = 'Potentially Vulnerable' in ruby_status
-        elif ecosystem == 'java':
-            java_status = await self.check_maven(package_name)
-            is_potentially_vulnerable = 'Potentially Vulnerable' in java_status
         
-        if is_critical:
-            risk = 'Critical'
-        elif is_potentially_vulnerable:
-            risk = 'High'
-        else:
-            risk = 'Low'
-        
-        return {
-            'package': package_name,
-            'ecosystem': ecosystem,
-            'npm_status': npm_status,
-            'pypi_status': pypi_status,
-            'ruby_status': ruby_status,
-            'java_status': java_status,
-            'scope_status': scope_status,
-            'risk': risk
+        base_result = {
+            "package": package_name,
+            "ecosystem": ecosystem,
+            "npm_status": "N/A",
+            "pypi_status": "N/A",
+            "ruby_status": "N/A",
+            "java_status": "N/A",
+            "scope_status": "N/A",
+            "risk": "Low"
         }
 
+        adapter = self.adapters.get(ecosystem)
+        if adapter:
+            status_dict = await adapter.check(package_name)
+            base_result.update(status_dict)
+
+        is_critical = "Critical" in base_result.get("scope_status", "")
+        is_potentially_vulnerable = any(
+            "Potentially Vulnerable" in str(val) 
+            for key, val in base_result.items() 
+            if key.endswith("_status")
+        )
+
+        if is_critical:
+            base_result["risk"] = "Critical"
+        elif is_potentially_vulnerable:
+            base_result["risk"] = "High"
+            
+        return base_result
+
     async def check_packages(self, packages: set[tuple[str, str]]) -> list[dict]:
-        print(f"[*] Verifying {len(packages)} packages with rate limits...")
+        print(f"[*] Verifying {len(packages)} packages...")
         tasks = [self.check_package(pkg) for pkg in packages]
         results = await asyncio.gather(*tasks)
         return results

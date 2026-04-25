@@ -1,21 +1,8 @@
-from curl_cffi import requests
-from curl_cffi.requests.errors import RequestsError
 import re
-import asyncio
 import json
 
 class Extractor:
-    def __init__(self, max_concurrent: int = 10, delay: float = 0.5, proxy: str = None, headers: dict = None, verify: bool = False):
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        self.client = requests.AsyncSession(
-            timeout=10.0,
-            impersonate="chrome110",
-            proxies=proxies,
-            verify=verify,
-            headers=headers
-        )
-        self.semaphore = asyncio.Semaphore(max_concurrent)
-        self.delay = delay
+    def __init__(self):
         # Common patterns for requires or imports
         self.patterns = [
             re.compile(r"""require\(['"]([^.'"][^'"]+)['"]\)"""),
@@ -48,7 +35,7 @@ class Extractor:
             return False
         return True
 
-    def extract_from_text(self, content: str, url: str) -> set[tuple[str, str]]:
+    def extract_packages(self, content: str, url: str) -> set[tuple[str, str]]:
         packages = set()
 
         # Dependency file parsing
@@ -124,31 +111,3 @@ class Extractor:
         
         return packages
 
-    async def fetch_and_extract(self, url: str) -> set[tuple[str, str]]:
-        packages = set()
-        async with self.semaphore:
-            try:
-                response = await self.client.get(url)
-                if response.status_code == 200:
-                    packages = self.extract_from_text(response.text, url)
-            except RequestsError:
-                pass # Silently ignore failed downloads for noisy files like assumed source maps
-            except Exception as e:
-                print(f"[-] Unexpected error extracting from {url}: {e}")
-            finally:
-                if self.delay > 0:
-                    await asyncio.sleep(self.delay)
-
-        return packages
-
-    async def extract_packages(self, urls: set[str]) -> set[tuple[str, str]]:
-        print(f"[*] Downloading {len(urls)} files with rate limits...")
-        all_packages = set()
-
-        tasks = [self.fetch_and_extract(url) for url in urls]
-        results = await asyncio.gather(*tasks)
-
-        for pkgs in results:
-            all_packages.update(pkgs)
-
-        return all_packages
