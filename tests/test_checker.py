@@ -1,117 +1,80 @@
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from checker import Checker
-
-class MockResponse:
-    def __init__(self, status_code, json_data=None):
-        self.status_code = status_code
-        self._json_data = json_data or {}
-
-    def json(self):
-        return self._json_data
-
-@pytest.fixture
-def checker():
-    c = Checker(delay=0.0)  # Disable default delay for faster tests
-    c.client.get = AsyncMock()
-    return c
+from unittest.mock import AsyncMock, MagicMock
+from checker import NpmRegistry, Checker
 
 @pytest.mark.asyncio
-async def test_make_request_rate_limiting(checker):
-    # Setup mock to return 429 twice, then 200
-    checker.client.get.side_effect = [
-        MockResponse(429),
-        MockResponse(429),
-        MockResponse(200)
-    ]
-    
-    with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-        response = await checker._make_request("http://test.com")
-        
-        assert response is not None
-        assert response.status_code == 200
-        assert checker.client.get.call_count == 3
-        # Should have slept twice (2**0 = 1, 2**1 = 2)
-        assert mock_sleep.call_count == 2
-        mock_sleep.assert_any_call(1)
-        mock_sleep.assert_any_call(2)
+async def test_npm_registry_found():
+    mock_http_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_http_client.get = AsyncMock(return_value=mock_response)
+
+    registry = NpmRegistry(mock_http_client)
+
+    result = await registry.check("react")
+
+    assert result["npm_status"] == "Found (Safe)"
+    mock_http_client.get.assert_called_once_with("https://registry.npmjs.org/react")
 
 @pytest.mark.asyncio
-async def test_make_request_exhaust_retries(checker):
-    # Setup mock to return 429 continuously
-    checker.client.get.return_value = MockResponse(429)
-    
-    with patch('asyncio.sleep', new_callable=AsyncMock):
-        response = await checker._make_request("http://test.com", retries=3)
-        assert response is None
-        assert checker.client.get.call_count == 3
+async def test_npm_registry_scoped_unclaimed():
+    mock_http_client = AsyncMock()
+
+    mock_scope_response = MagicMock()
+    mock_scope_response.status_code = 404
+
+    mock_pkg_response = MagicMock()
+    mock_pkg_response.status_code = 404
+
+    mock_http_client.get = AsyncMock(side_effect=[mock_scope_response, mock_pkg_response])
+
+    registry = NpmRegistry(mock_http_client)
+    result = await registry.check("@myorg/internal-pkg")
+
+    assert result["scope_status"] == "Unclaimed Scope (Critical)"
+    assert result["npm_status"] == "Not Found (Potentially Vulnerable)"
+
+    assert mock_http_client.get.call_count == 2
+    mock_http_client.get.assert_any_call("https://registry.npmjs.org/-/org/myorg/package")
+    mock_http_client.get.assert_any_call("https://registry.npmjs.org/@myorg/internal-pkg")
 
 @pytest.mark.asyncio
-async def test_check_npm_safe(checker):
-    checker.client.get.return_value = MockResponse(200)
-    result = await checker.check_npm("lodash")
-    assert result == "Found (Safe)"
+async def test_checker_aggregation_and_routing():
+    mock_npm_registry = AsyncMock()
+    mock_npm_registry.check = AsyncMock(return_value={
+        "npm_status": "Not Found (Potentially Vulnerable)",
+        "scope_status": "Unclaimed Scope (Critical)"
+    })
 
-@pytest.mark.asyncio
-async def test_check_npm_vulnerable(checker):
-    checker.client.get.return_value = MockResponse(404)
-    result = await checker.check_npm("internal-company-pkg")
-    assert result == "Not Found (Potentially Vulnerable)"
+    mock_pypi_registry = AsyncMock()
+    mock_pypi_registry.check = AsyncMock(return_value={
+        "pypi_status": "Found (Safe)"
+    })
 
-@pytest.mark.asyncio
-async def test_check_npm_error(checker):
-    checker.client.get.return_value = MockResponse(500)
-    result = await checker.check_npm("lodash")
-    assert result == "Error (500)"
+    adapters = {
+        'npm': mock_npm_registry,
+        'python': mock_pypi_registry
+    }
 
-@pytest.mark.asyncio
-async def test_check_pypi_scoped(checker):
-    # PyPI shouldn't even make a request for scoped packages
-    result = await checker.check_pypi("@scope/pkg")
-    assert result == "N/A (Scoped)"
-    checker.client.get.assert_not_called()
+    checker = Checker(adapters=adapters)
 
-@pytest.mark.asyncio
-async def test_check_pypi_safe(checker):
-    checker.client.get.return_value = MockResponse(200)
-    result = await checker.check_pypi("requests")
-    assert result == "Found (Safe)"
+    packages = {("@myorg/internal", "npm"), ("requests", "python")}
+    results = await checker.check_packages(packages)
 
-@pytest.mark.asyncio
-async def test_check_maven_safe(checker):
-    checker.client.get.return_value = MockResponse(200, json_data={"response": {"numFound": 1}})
-    result = await checker.check_maven("com.company:library")
-    assert result == "Found (Safe)"
+    assert len(results) == 2
 
-@pytest.mark.asyncio
-async def test_check_maven_vulnerable(checker):
-    checker.client.get.return_value = MockResponse(200, json_data={"response": {"numFound": 0}})
-    result = await checker.check_maven("com.company:internal-library")
-    assert result == "Not Found (Potentially Vulnerable)"
+    # Verify npm package result
+    npm_res = next(r for r in results if r["ecosystem"] == "npm")
+    assert npm_res["package"] == "@myorg/internal"
+    assert npm_res["risk"] == "Critical"
+    assert npm_res["npm_status"] == "Not Found (Potentially Vulnerable)"
 
-@pytest.mark.asyncio
-async def test_check_maven_parse_error(checker):
-    # Mock a response where .json() throws an error (e.g. invalid JSON)
-    mock_resp = MockResponse(200)
-    mock_resp.json = MagicMock(side_effect=Exception("Invalid JSON"))
-    checker.client.get.return_value = mock_resp
-    result = await checker.check_maven("com.company:library")
-    assert result == "Parse Error"
+    # Verify pypi package result
+    pypi_res = next(r for r in results if r["ecosystem"] == "python")
+    assert pypi_res["package"] == "requests"
+    assert pypi_res["risk"] == "Low"
+    assert pypi_res["pypi_status"] == "Found (Safe)"
 
-@pytest.mark.asyncio
-async def test_check_rubygems_safe(checker):
-    checker.client.get.return_value = MockResponse(200)
-    result = await checker.check_rubygems("rails")
-    assert result == "Found (Safe)"
-
-@pytest.mark.asyncio
-async def test_check_package_routing(checker):
-    # Verify check_package routes correctly and aggregates results
-    checker.client.get.return_value = MockResponse(404)
-    result = await checker.check_package(("internal-pkg", "npm"))
-    
-    assert result['package'] == "internal-pkg"
-    assert result['ecosystem'] == "npm"
-    assert result['npm_status'] == "Not Found (Potentially Vulnerable)"
-    assert result['risk'] == "High"
+    # Verify correct routing
+    mock_npm_registry.check.assert_called_once_with("@myorg/internal")
+    mock_pypi_registry.check.assert_called_once_with("requests")

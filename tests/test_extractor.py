@@ -1,48 +1,61 @@
 import pytest
 from extractor import Extractor
 
-@pytest.fixture
-def extractor():
-    return Extractor()
+def test_extract_requirements_txt():
+    extractor = Extractor()
+    content = """
+requests==2.31.0
+# a comment
+pytest>=7.4.0
+"""
+    packages = extractor.extract_packages(content, 'https://example.com/requirements.txt')
 
-def test_is_likely_internal_whitelist(extractor):
-    # Whitelisted packages should return False (not internal)
-    assert extractor.is_likely_internal('react') is False
-    assert extractor.is_likely_internal('lodash') is False
-    assert extractor.is_likely_internal('express') is False
+    assert ('requests', 'python') in packages
+    assert ('pytest', 'python') in packages
 
-def test_is_likely_internal_relative_paths(extractor):
-    # Relative or absolute paths should return False
-    assert extractor.is_likely_internal('./components/Button') is False
-    assert extractor.is_likely_internal('../utils') is False
-    assert extractor.is_likely_internal('/var/www/app') is False
-    assert extractor.is_likely_internal('\\windows\\path') is False
+def test_extract_ruby_gemfile():
+    extractor = Extractor()
+    content = """
+source "https://rubygems.org"
+gem "rails", "~> 7.0.0"
+gem 'pg'
+"""
+    packages = extractor.extract_packages(content, 'https://example.com/Gemfile')
+    assert ('rails', 'ruby') in packages
+    assert ('pg', 'ruby') in packages
 
-def test_is_likely_internal_short_names(extractor):
-    # Names shorter than 2 characters should return False
-    assert extractor.is_likely_internal('a') is False
-    assert extractor.is_likely_internal('') is False
+def test_extract_java_pom():
+    extractor = Extractor()
+    content = """
+<project>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+"""
+    packages = extractor.extract_packages(content, 'https://example.com/pom.xml')
+    assert ('spring-boot-starter-web', 'java') in packages
 
-def test_is_likely_internal_minified_ids(extractor):
-    # Short alphanumeric strings with at least one uppercase letter (minified IDs) should return False
-    assert extractor.is_likely_internal('Kijs') is False
-    assert extractor.is_likely_internal('g9Kq') is False
-    assert extractor.is_likely_internal('A1') is False
-    
-    # But if they don't have uppercase or are longer, they might be valid
-    assert extractor.is_likely_internal('kijs') is True
-    assert extractor.is_likely_internal('Kijs1') is True # Length 5
+def test_extract_npm_js_map():
+    extractor = Extractor()
+    content = '{"version":3,"sources":["webpack:///node_modules/axios/index.js","webpack:///node_modules/@myorg/internal-pkg/utils.js"]}'
+    packages = extractor.extract_packages(content, 'https://example.com/app.js.map')
+    # axios should be ignored because it is in the whitelist
+    assert ('axios', 'npm') not in packages
+    assert ('@myorg/internal-pkg', 'npm') in packages
 
-def test_is_likely_internal_malformed_names(extractor):
-    # Dynamic variables, template strings, or malformed names should return False
-    assert extractor.is_likely_internal('${dynamic}') is False
-    assert extractor.is_likely_internal('pkg!') is False
-    assert extractor.is_likely_internal('@scope/pkg/extra') is False # Only one slash allowed in regex
-    assert extractor.is_likely_internal('-pkg') is False
-
-def test_is_likely_internal_valid_names(extractor):
-    # Valid potential internal packages should return True
-    assert extractor.is_likely_internal('my-internal-pkg') is True
-    assert extractor.is_likely_internal('@myorg/internal-pkg') is True
-    assert extractor.is_likely_internal('company.utils') is True
-    assert extractor.is_likely_internal('custom_logger') is True
+def test_extract_npm_js_requires():
+    extractor = Extractor()
+    content = """
+    const _ = require('lodash');
+    const myLib = require('@company/mylib');
+    import { something } from 'external-lib';
+    """
+    packages = extractor.extract_packages(content, 'https://example.com/app.js')
+    # lodash should be ignored (whitelist)
+    assert ('lodash', 'npm') not in packages
+    assert ('@company/mylib', 'npm') in packages
+    assert ('external-lib', 'npm') in packages
