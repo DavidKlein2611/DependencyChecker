@@ -3,9 +3,10 @@ from urllib.parse import urlparse
 import asyncio
 from rich.console import Console
 
+from http_client import HTTPClient
 from crawler import Crawler
 from extractor import Extractor
-from checker import Checker
+from checker import Checker, NpmRegistry, PypiRegistry, RubyGemsRegistry, MavenRegistry
 from reporter import Reporter
 
 console = Console()
@@ -30,33 +31,53 @@ async def run(url: str, timing_level: int, proxy: str = None, headers: dict = No
         console.print(f"[bold blue][*][/bold blue] Using {len(headers)} custom headers")
     
     verify_ssl = False if insecure or proxy else True
+    
+    http_client = HTTPClient(max_concurrent=concurrency, delay=delay, proxy=proxy, headers=headers, verify=verify_ssl)
 
     # Phase 2: Discovery
-    crawler = Crawler(url, proxy=proxy, headers=headers, max_concurrent=concurrency, delay=delay, max_depth=depth, verify=verify_ssl)
+    crawler = Crawler(http_client, url, max_depth=depth)
     js_urls = await crawler.discover_js_files()
-    await crawler.client.close()
     
     if not js_urls:
         console.print("[bold yellow][-][/bold yellow] No JavaScript or source map files found.")
+        await http_client.close()
         return
         
     console.print(f"[bold green][+][/bold green] Found {len(js_urls)} potential files to analyze.")
     
     # Phase 3: Extraction
-    extractor = Extractor(max_concurrent=concurrency, delay=delay, proxy=proxy, headers=headers, verify=verify_ssl)
-    packages = await extractor.extract_packages(js_urls)
-    await extractor.client.close()
+    extractor = Extractor()
+    packages = set()
+    
+    console.print(f"[*] Downloading {len(js_urls)} files with rate limits...")
+    
+    async def fetch_and_extract(file_url):
+        response = await http_client.get(file_url)
+        if response and response.status_code == 200:
+            extracted = extractor.extract_packages(response.text, file_url)
+            packages.update(extracted)
+            
+    tasks = [fetch_and_extract(u) for u in js_urls]
+    await asyncio.gather(*tasks)
     
     if not packages:
         console.print("[bold yellow][-][/bold yellow] No potential internal packages found.")
+        await http_client.close()
         return
         
     console.print(f"[bold green][+][/bold green] Extracted {len(packages)} unique package names to check.")
     
     # Phase 4: Validation
-    checker = Checker(max_concurrent=concurrency, delay=delay, proxy=proxy, verify=verify_ssl)
+    adapters = {
+        'npm': NpmRegistry(http_client),
+        'python': PypiRegistry(http_client),
+        'ruby': RubyGemsRegistry(http_client),
+        'java': MavenRegistry(http_client)
+    }
+    checker = Checker(adapters=adapters)
     findings = await checker.check_packages(packages)
-    await checker.client.close()
+    
+    await http_client.close()
     
     # Phase 5: Reporting
     reporter = Reporter()

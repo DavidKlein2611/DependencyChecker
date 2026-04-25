@@ -3,7 +3,8 @@ from collections import OrderedDict
 from mitmproxy import http
 from mitmproxy import ctx
 from extractor import Extractor
-from checker import Checker
+from checker import Checker, NpmRegistry, PypiRegistry, RubyGemsRegistry, MavenRegistry
+from http_client import HTTPClient
 from rich.console import Console
 
 console = Console()
@@ -27,10 +28,16 @@ class LRUSet:
 
 class DependencyConfusionAddon:
     def __init__(self):
-        # Initialize the Extractor and Checker
-        # We don't need proxies for passive mode as the traffic is already flowing through mitmproxy
+        self.http_client = HTTPClient()
         self.extractor = Extractor()
-        self.checker = Checker()
+        
+        adapters = {
+            'npm': NpmRegistry(self.http_client),
+            'python': PypiRegistry(self.http_client),
+            'ruby': RubyGemsRegistry(self.http_client),
+            'java': MavenRegistry(self.http_client)
+        }
+        self.checker = Checker(adapters=adapters)
         
         # Keep track of what we've seen to avoid redundant processing
         self.analyzed_urls = LRUSet(10000)
@@ -60,7 +67,7 @@ class DependencyConfusionAddon:
                 return
 
             # Extract packages directly from the text
-            packages = self.extractor.extract_from_text(content, url)
+            packages = self.extractor.extract_packages(content, url)
             
             # Filter out packages we have already checked during this session
             new_packages = {pkg for pkg in packages if pkg[0] not in self.checked_packages}
@@ -101,8 +108,7 @@ class DependencyConfusionAddon:
 
     def done(self):
         # Cleanup tasks if mitmproxy is shutting down
-        asyncio.create_task(self.extractor.client.close())
-        asyncio.create_task(self.checker.client.close())
+        asyncio.create_task(self.http_client.close())
 
 # mitmproxy looks for the 'addons' list
 addons = [

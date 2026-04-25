@@ -1,28 +1,13 @@
-from curl_cffi import requests
-from curl_cffi.requests.errors import RequestsError
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import asyncio
 
 class Crawler:
-    def __init__(self, base_url: str, proxy: str = None, headers: dict = None, max_concurrent: int = 10, delay: float = 0.5, max_depth: int = 1, verify: bool = False):
+    def __init__(self, http_client, base_url: str, max_depth: int = 1):
+        self.http_client = http_client
         self.base_url = base_url
         self.domain = urlparse(base_url).netloc
         self.max_depth = max_depth
-        self.semaphore = asyncio.Semaphore(max_concurrent)
-        self.delay = delay
-        
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        
-        # We use impersonate="chrome110" to spoof the TLS handshake (JA3/JA4 fingerprint) 
-        # and automatically inject perfect Chrome HTTP/2 headers.
-        self.client = requests.AsyncSession(
-            timeout=10.0,
-            impersonate="chrome110",
-            proxies=proxies,
-            verify=verify, # Ignore self-signed certs when using interception proxies like Burp
-            headers=headers
-        )
         
     async def fetch_page(self, url: str, current_depth: int, visited: set, js_urls: set):
         if url in visited or current_depth > self.max_depth:
@@ -30,19 +15,9 @@ class Crawler:
             
         visited.add(url)
         
-        async with self.semaphore:
-            try:
-                response = await self.client.get(url)
-                if response.status_code != 200:
-                    return
-            except RequestsError:
-                return
-            except Exception as e:
-                print(f"[-] Unexpected error fetching {url}: {e}")
-                return
-            finally:
-                if self.delay > 0:
-                    await asyncio.sleep(self.delay)
+        response = await self.http_client.get(url)
+        if not response or response.status_code != 200:
+            return
                     
         soup = BeautifulSoup(response.text, 'html.parser')
         
@@ -76,7 +51,6 @@ class Crawler:
                     next_url = next_url.split('#')[0]
                     
                     # Check for dependency files
-                    dep_files = ['.txt', 'Pipfile', 'Gemfile', 'Gemfile.lock', 'pom.xml', 'build.gradle']
                     if any(next_url.endswith(f) for f in ['requirements.txt', 'Pipfile', 'Gemfile', 'Gemfile.lock', 'pom.xml', 'build.gradle']):
                         js_urls.add(next_url)
                     
