@@ -35,9 +35,9 @@ If an internal-looking package name is referenced in the target's source code or
    source venv/bin/activate
    ```
 
-3. Install the required dependencies:
+3. Install the tool and its dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 
 ## Usage
@@ -46,7 +46,7 @@ If an internal-looking package name is referenced in the target's source code or
 The active crawler automatically spiders the target to find and extract dependencies.
 
 ```text
-usage: main.py [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] [-j] [-d DEPTH] url
+usage: DependencyChecker [-h] [-T {0,1,2,3,4,5}] [-p PROXY] [-H HEADER] [-j] [-d DEPTH] url
 
 Automated Dependency Confusion Checker
 
@@ -71,37 +71,37 @@ options:
 **Standard Scan:**
 Executes with default settings.
 ```bash
-python main.py https://target.com
+DependencyChecker https://target.com
 ```
 
 **Deep Spidering Scan:**
 Recursively crawls all internal links up to a depth of 3 to discover hidden JavaScript chunks in large Single Page Applications.
 ```bash
-python main.py -d 3 https://target.com
+DependencyChecker -d 3 https://target.com
 ```
 
 **Scan and Save to JSON:**
 Outputs findings to the terminal and saves a detailed JSON report.
 ```bash
-python main.py -j https://target.com
+DependencyChecker -j https://target.com
 ```
 
 **Stealth Scan:**
 Executes with a slow timing profile (`-T 1`) to evade behavioral WAF detections and abide by rate limit RoEs.
 ```bash
-python main.py -T 1 https://target.com
+DependencyChecker -T 1 https://target.com
 ```
 
 **Authenticated Scan (Custom Headers):**
 Passes specific headers to the target to bypass authentication layers or meet VDP requirements.
 ```bash
-python main.py -T 2 -H "Authorization: Bearer <token>" -H "Cookie: session=123" https://target.com
+DependencyChecker -T 2 -H "Authorization: Bearer <token>" -H "Cookie: session=123" https://target.com
 ```
 
 **Proxied Scan:**
 Routes all traffic through a local interception proxy (like Burp Suite).
 ```bash
-python main.py -T 2 -p http://127.0.0.1:8080 https://target.com
+DependencyChecker -T 2 -p http://127.0.0.1:8080 https://target.com
 ```
 
 ### Passive Scanning Mode (Browser Proxy)

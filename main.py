@@ -83,7 +83,7 @@ async def run(url: str, timing_level: int, proxy: str = None, headers: dict = No
     reporter = Reporter()
     reporter.generate_report(findings, url, save_json=save_json)
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Automated Dependency Confusion Checker")
     parser.add_argument("url", help="The target URL to scan (e.g., https://example.com)")
     parser.add_argument("-T", "--timing", type=int, choices=[0, 1, 2, 3, 4, 5], default=3,
@@ -117,3 +117,6 @@ if __name__ == "__main__":
         target_url = args.url
         
     asyncio.run(run(target_url, args.timing, args.proxy, custom_headers, args.json, args.depth, args.insecure))
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dependencychecker"
+version = "0.1.0"
+description = "Automated Dependency Confusion Checker"
+dependencies = [
+    "anyio",
+    "beautifulsoup4",
+    "certifi",
+    "cffi",
+    "curl_cffi",
+    "h11",
+    "httpcore",
+    "httpx",
+    "idna",
+    "markdown-it-py",
+    "mdurl",
+    "pycparser",
+    "Pygments",
+    "rich",
+    "soupsieve",
+    "typing_extensions",
+    "mitmproxy>=10.0.0"
+]
+
+[project.scripts]
+DependencyChecker = "main:main"
+
+[tool.setuptools]
+py-modules = ["checker", "crawler", "extractor", "http_client", "main", "passive_proxy", "reporter"]
