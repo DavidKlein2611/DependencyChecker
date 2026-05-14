@@ -136,7 +136,10 @@ class Checker:
         if is_critical:
             base_result["risk"] = "Critical"
         elif is_potentially_vulnerable:
-            base_result["risk"] = "High"
+            if base_result.get("scope_status") == "Claimed Scope (Safe)":
+                pass
+            else:
+                base_result["risk"] = "High"
             
         return base_result
 
